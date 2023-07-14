@@ -2,6 +2,8 @@
 
 go-discogs is a Go client library for the [Discogs API](https://www.discogs.com/developers/). Check the usage section to see how to access the Discogs API.
 
+Note : this is a fork of sblinch/go-discogs itself a fork of irlndts/go-discogs
+
 The lib is under MIT but be sure you are familiar with [Discogs API Terms of Use](https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use).
 
 ### Features
@@ -26,14 +28,14 @@ The lib is under MIT but be sure you are familiar with [Discogs API Terms of Use
  
 Install
 --------
-    go get github.com/irlndts/go-discogs
+    go get github.com/anaelorlinski/go-discogs
 
 Usage
 ---------
 The discogs package provides a client for accessing the Discogs API. 
 First of all import library and init client variable. According to discogs api documentation you [must provide your user-agent](https://www.discogs.com/developers/#page:home,header:home-general-information). 
 ```go
-import "github.com/irlndts/go-discogs"
+import "github.com/anaelorlinski/go-discogs"
 ```
 
 Some requests require authentication (as any user). According to [Discogs](https://www.discogs.com/developers/#page:authentication,header:authentication-discogs-auth-flow), to send requests with Discogs Auth, you have two options: sending your credentials in the query string with key and secret parameters or a [token parameter](https://www.discogs.com/settings/developers).
@@ -136,5 +138,3 @@ Retrieve marketplace statistics for the provided Release ID
 ```
 
 ...
-
-by the way, this is [my discogs page](https://www.discogs.com/user/magnetic-loft-music)
