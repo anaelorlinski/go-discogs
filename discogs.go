@@ -36,6 +36,7 @@ type Discogs interface {
 	DatabaseService
 	MarketPlaceService
 	SearchService
+	WantlistService
 }
 
 type discogs struct {
@@ -43,6 +44,7 @@ type discogs struct {
 	DatabaseService
 	SearchService
 	MarketPlaceService
+	WantlistService
 }
 
 type requestFunc func(ctx context.Context, path string, params url.Values, resp interface{}) error
@@ -79,12 +81,19 @@ func New(o *Options) (Discogs, error) {
 		return request(ctx, client, header, o.RateLimit, path, params, resp)
 	}
 
-	return discogs{
+	impl := discogs{
 		newCollectionService(req, o.URL+"/users"),
 		newDatabaseService(req, o.URL, cur),
 		newSearchService(req, o.URL+"/database/search"),
 		newMarketPlaceService(req, o.URL+"/marketplace", cur),
-	}, nil
+		newWantlistService(req, o.URL+"/users"),
+	}
+
+	if o.RateLimit != nil {
+		return o.RateLimit.Client(impl), nil
+	}
+
+	return impl, nil
 }
 
 // currency validates currency for marketplace data.

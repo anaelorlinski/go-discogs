@@ -11,6 +11,7 @@ func RateLimited(d Discogs, rl *RateLimit) Discogs {
 		ratelimitedDatabaseService:    ratelimitedDatabaseService{d: d, rl: rl},
 		ratelimitedSearchService:      ratelimitedSearchService{d: d, rl: rl},
 		ratelimitedMarketPlaceService: ratelimitedMarketPlaceService{d: d, rl: rl},
+		ratelimitedWantlistService:    ratelimitedWantlistService{d: d, rl: rl},
 	}
 }
 
@@ -20,6 +21,7 @@ type ratelimitedDiscogs struct {
 	ratelimitedDatabaseService
 	ratelimitedSearchService
 	ratelimitedMarketPlaceService
+	ratelimitedWantlistService
 }
 
 type ratelimitedDatabaseService struct {
@@ -173,6 +175,83 @@ func (r ratelimitedSearchService) Search(ctx context.Context, req SearchRequest)
 		var err error
 		v, err = r.d.Search(ctx, req)
 		return err
+	})
+	return
+}
+
+type ratelimitedWantlistService struct {
+	d  Discogs
+	rl *RateLimit
+}
+
+func (r ratelimitedWantlistService) Wantlist(ctx context.Context, username string, pagination *WantlistPagination) (v *Wantlist, e error) {
+	e = r.rl.Call(ctx, func() error {
+		var err error
+		v, err = r.d.Wantlist(ctx, username, pagination)
+		return err
+	})
+	return
+}
+
+func (r ratelimitedWantlistService) CompleteWantlist(ctx context.Context, username string) (*Wantlist, error) {
+	if username == "" {
+		return nil, ErrInvalidUsername
+	}
+	fullWantlist := Wantlist{}
+	pagination := WantlistPagination{Page: 1, PerPage: maxWishlistPageItems}
+
+	// fetches all the pages
+	// TODO : try to make fetching all pages generic
+	for {
+		var wantlistPage *Wantlist
+
+		// do the request
+		err := r.rl.Call(ctx, func() error {
+			var err error
+			wantlistPage, err = r.d.Wantlist(ctx, username, &pagination)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// merge elems
+		fullWantlist.Merge(wantlistPage)
+
+		if wantlistPage.Pagination.Page == wantlistPage.Pagination.Pages {
+			// stop when all pages have been fetched
+			break
+		}
+
+		// update pagination
+		pagination.Page += 1
+	}
+
+	fullWantlist.Pagination.Items = len(fullWantlist.Items)
+	fullWantlist.Pagination.PerPage = len(fullWantlist.Items)
+	fullWantlist.Pagination.Page = 1
+	fullWantlist.Pagination.Pages = 1
+
+	return &fullWantlist, nil
+}
+
+func (r ratelimitedWantlistService) AddWantlistItem(ctx context.Context, username string, item WantlistItem) (e error) {
+	e = r.rl.Call(ctx, func() error {
+		return r.d.AddWantlistItem(ctx, username, item)
+	})
+	return
+}
+
+func (r ratelimitedWantlistService) UpdateWantlistItem(ctx context.Context, username string, item WantlistItem) (e error) {
+	e = r.rl.Call(ctx, func() error {
+		return r.d.UpdateWantlistItem(ctx, username, item)
+	})
+	return
+}
+
+func (r ratelimitedWantlistService) DeleteWantlistItem(ctx context.Context, username string, item WantlistItem) (e error) {
+	e = r.rl.Call(ctx, func() error {
+		return r.d.DeleteWantlistItem(ctx, username, item)
 	})
 	return
 }

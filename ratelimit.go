@@ -73,7 +73,7 @@ func (r *RateLimit) call(ctx context.Context, f func() error, sleep func(context
 		// pause if the rate limiting metrics are reasonably fresh and we have no remaining permitted requests, OR if
 		// we just received ErrTooManyRequests regardless of how many requests Discogs claims we have remaining;
 		// Discogs seems to report the pre-request X-Discogs-Ratelimit-Used value, so we're out of requests when remaining==1
-		if !first || time.Now().Sub(when) < 10*time.Second && remaining <= 1 {
+		if !first || time.Since(when) < 10*time.Second && remaining <= 1 {
 			if err := sleep(ctx, delay); err != nil {
 				return err
 			}
