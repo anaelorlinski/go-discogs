@@ -1,9 +1,11 @@
 package discogs
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -48,6 +50,7 @@ type discogs struct {
 }
 
 type requestFunc func(ctx context.Context, path string, params url.Values, resp interface{}) error
+type writeFunc func(ctx context.Context, path string, method string, params url.Values, payload interface{}, resp interface{}, successStatus int) error
 
 // New returns a new discogs API client.
 func New(o *Options) (Discogs, error) {
@@ -78,7 +81,11 @@ func New(o *Options) (Discogs, error) {
 		client = &http.Client{}
 	}
 	req := func(ctx context.Context, path string, params url.Values, resp interface{}) error {
-		return request(ctx, client, header, o.RateLimit, path, params, resp)
+		return request(ctx, client, "GET", header, o.RateLimit, path, params, nil, resp, http.StatusOK)
+	}
+
+	write := func(ctx context.Context, path string, method string, params url.Values, payload interface{}, resp interface{}, successStatus int) error {
+		return request(ctx, client, method, header, o.RateLimit, path, params, payload, resp, successStatus)
 	}
 
 	impl := discogs{
@@ -86,7 +93,7 @@ func New(o *Options) (Discogs, error) {
 		newDatabaseService(req, o.URL, cur),
 		newSearchService(req, o.URL+"/database/search"),
 		newMarketPlaceService(req, o.URL+"/marketplace", cur),
-		newWantlistService(req, o.URL+"/users"),
+		newWantlistService(req, write, o.URL+"/users"),
 	}
 
 	if o.RateLimit != nil {
@@ -110,12 +117,21 @@ func currency(c string) (string, error) {
 	}
 }
 
-func request(ctx context.Context, client *http.Client, header *http.Header, rl *RateLimit, path string, params url.Values, resp interface{}) error {
-	r, err := http.NewRequestWithContext(ctx, "GET", path+"?"+params.Encode(), nil)
+func request(ctx context.Context, client *http.Client, method string, header *http.Header,
+	rl *RateLimit, path string, params url.Values, payload interface{}, resp interface{}, successStatus int) error {
+
+	var rawPayload io.Reader
+	if payload != nil {
+		s, _ := json.Marshal(payload)
+		rawPayload = bytes.NewReader(s)
+	}
+
+	r, err := http.NewRequestWithContext(ctx, method, path+"?"+params.Encode(), rawPayload)
 	if err != nil {
 		return err
 	}
 	r.Header = *header
+	r.Header.Set("Content-Type", "application/json; charset=UTF-8")
 
 	response, err := client.Do(r)
 	if err != nil {
@@ -130,7 +146,7 @@ func request(ctx context.Context, client *http.Client, header *http.Header, rl *
 		rl.Update(total, used, remaining)
 	}
 
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != successStatus {
 		switch response.StatusCode {
 		case http.StatusUnauthorized:
 			return ErrUnauthorized
@@ -141,10 +157,14 @@ func request(ctx context.Context, client *http.Client, header *http.Header, rl *
 		}
 	}
 
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return err
+	if resp != nil {
+		body, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			return err
+		}
+
+		return json.Unmarshal(body, &resp)
 	}
 
-	return json.Unmarshal(body, &resp)
+	return nil
 }

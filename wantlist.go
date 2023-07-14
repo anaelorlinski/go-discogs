@@ -3,6 +3,7 @@ package discogs
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -20,28 +21,23 @@ type WantlistService interface {
 
 type wantlistService struct {
 	request requestFunc
+	write   writeFunc
 	url     string
 }
 
-func newWantlistService(req requestFunc, url string) WantlistService {
+func newWantlistService(req requestFunc, write writeFunc, url string) WantlistService {
 	return &wantlistService{
 		request: req,
+		write:   write,
 		url:     url,
 	}
 }
 
-// CollectionFolders serves collection response from discogs.
+// note : rating is not implemented
 type WantlistItem struct {
-	ID          int              `json:"id"`
-	Rating      int              `json:"rating"`
-	Notes       string           `json:"notes"`
-	NotesPublic string           `json:"notes_public"`
-	Release     BasicInformation `json:"basic_information"`
-}
-
-type WantlistPagination struct {
-	Page    int
-	PerPage int
+	ID      int               `json:"id"`
+	Notes   string            `json:"notes"`
+	Release *BasicInformation `json:"basic_information,omitempty"`
 }
 
 type Wantlist struct {
@@ -51,6 +47,11 @@ type Wantlist struct {
 
 func (w *Wantlist) Merge(other *Wantlist) {
 	w.Items = append(w.Items, other.Items...)
+}
+
+type WantlistPagination struct {
+	Page    int
+	PerPage int
 }
 
 // toParams converts pagaination params to request values
@@ -83,14 +84,34 @@ func (s *wantlistService) CompleteWantlist(ctx context.Context, username string)
 	return nil, fmt.Errorf("implemented only on ratelimited")
 }
 
-func (s *wantlistService) AddWantlistItem(ctx context.Context, username string, item WantlistItem) error {
-	return nil
+func (s *wantlistService) AddWantlistItem(ctx context.Context, username string, item WantlistItem) (e error) {
+	if username == "" {
+		return ErrInvalidUsername
+	}
+
+	uri := s.url + "/" + username + "/wants/" + strconv.Itoa(item.ID)
+	e = s.write(ctx, uri, "PUT", url.Values{}, item, nil, http.StatusCreated)
+
+	return
 }
 
-func (s *wantlistService) UpdateWantlistItem(ctx context.Context, username string, item WantlistItem) error {
-	return nil
+func (s *wantlistService) UpdateWantlistItem(ctx context.Context, username string, item WantlistItem) (e error) {
+	if username == "" {
+		return ErrInvalidUsername
+	}
+
+	uri := s.url + "/" + username + "/wants/" + strconv.Itoa(item.ID)
+	e = s.write(ctx, uri, "POST", url.Values{}, item, nil, http.StatusOK)
+
+	return
 }
 
-func (s *wantlistService) DeleteWantlistItem(ctx context.Context, username string, item WantlistItem) error {
-	return nil
+func (s *wantlistService) DeleteWantlistItem(ctx context.Context, username string, item WantlistItem) (e error) {
+	if username == "" {
+		return ErrInvalidUsername
+	}
+	uri := s.url + "/" + username + "/wants/" + strconv.Itoa(item.ID)
+	e = s.write(ctx, uri, "DELETE", url.Values{}, nil, nil, http.StatusNoContent)
+
+	return
 }
